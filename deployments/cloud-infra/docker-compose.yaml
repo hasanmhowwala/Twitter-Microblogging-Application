@@ -1,0 +1,123 @@
+# Use root/example as user/password credentials
+version: "3.1"
+
+services:
+    nginx:
+        image: nginx:latest
+        restart: always
+        volumes:
+            - ./nginx:/etc/nginx/conf.d
+        ports:
+            - "80:80"
+            - "443:443"
+        depends_on:
+            - post-service
+            - follow-service
+        networks:
+            - nginx-network
+
+    post-service:
+        image: sjkchang/chatwave-post-service
+        restart: always
+        environment:
+            MONGO_URL: ${MONGO_URL}
+            MONGO_USER: ${MONGO_USERNAME}
+            MONGO_PASSWORD: ${MONGO_PASSWORD}
+            MONGO_DB_NAME: ${MONGO_DB_NAME}
+
+            REDIS_HOST: ${REDIS_HOST}
+            REDIS_PORT: ${REDIS_PORT}
+            REDIS_PASS: ${REDIS_PASS}
+
+            AMQP_URL: ${AMQP_URL}
+
+            AUTH_SERVER_URL: ${AUTH0_SERVER_URL}
+            AUTH_CLIENT_ID: ${AUTH0_INTERFACE_CLIENT_ID}
+        networks:
+            - nginx-network
+
+    neo4j:
+        image: neo4j:latest
+        restart: always
+        ports:
+            - "7474:7474"
+            - "7687:7687"
+        environment:
+            NEO4J_AUTH: ${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+        volumes:
+            - neo4j_data:/data
+            - neo4j_logs:/logs
+            - neo4j_import:/var/lib/neo4j/import
+            - neo4j_plugins:/plugins
+        networks:
+            - follow-network
+
+    follow-service:
+        image: sjkchang/chatwave-follow-service
+        restart: always
+        environment:
+            AUTH_SERVER_URL: ${AUTH0_SERVER_URL}
+            AUTH_CLIENT_ID: ${AUTH0_INTERFACE_CLIENT_ID}
+
+            REDIS_HOST: ${REDIS_HOST}
+            REDIS_PORT: ${REDIS_PORT}
+            REDIS_PASS: ${REDIS_PASS}
+
+            NEO4J_URL: bolt://neo4j:7687
+            NEO4J_USERNAME: ${NEO4J_USERNAME}
+            NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+        networks:
+            - follow-network
+            - nginx-network
+
+    feed-service:
+        image: sjkchang/chatwave-feed-service
+        restart: always
+        environment:
+            AUTH_SERVER_URL: ${AUTH0_SERVER_URL}
+            AUTH_CLIENT_ID: ${AUTH0_INTERFACE_CLIENT_ID}
+
+            MONGO_URL: mongodb+srv://sjkchang:parpiL1rTOyZFznQ@microblog.ttp9uez.mongodb.net/?retryWrites=true&w=majority
+            MONGO_USER: sjkchang
+            MONGO_PASSWORD: parpiL1rTOyZFznQ
+            MONGO_DB_NAME: Microblog
+
+            AMQP_URL: ${AMQP_URL}
+
+            FOLLOW_SERVICE_URL: http://follow-service:3000
+            FOLLOW_SERVICE_BASE_PATH: /
+        networks:
+            - nginx-network
+
+    interface:
+        image: sjkchang/chatwave-interface
+        ports:
+            - "3000:3000"
+        environment:
+            API_BASE_URL: "http://nginx:80"
+
+            AUTH0_SECRET: ${AUTH0_SECRET}
+            AUTH0_BASE_URL: ${AUTH0_BASE_URL}
+            AUTH0_ISSUER_BASE_URL: ${AUTH0_SERVER_URL}
+            AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID}
+            AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET}
+
+            AUTH0_MANAGEMENT_CLIENT_ID: ${AUTH0_MANAGEMENT_CLIENT_ID}
+            AUTH0_MANAGEMENT_CLIENT_SECRET: ${AUTH0_MANAGEMENT_CLIENT_SECRET}
+            AUTH0_MANAGEMENT_AUDIENCE: ${AUTH0_MANAGEMENT_AUDIENCE}
+
+            OPENAI_API_KEY: ${OPENAI_API_KEY}
+        networks:
+            - nginx-network
+
+volumes:
+    neo4j_data:
+    neo4j_logs:
+    neo4j_import:
+    neo4j_plugins:
+
+networks:
+    follow-network:
+        driver: bridge
+    nginx-network:
+        driver: bridge
